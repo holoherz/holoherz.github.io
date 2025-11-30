@@ -1,0 +1,237 @@
+<html>
+  <head>
+    <script src="face-api.js"></script>
+    <script
+      type="text/javascript"
+      src="https://code.jquery.com/jquery-2.1.1.min.js"
+    ></script>
+  </head>
+  <body>
+    <script>
+      let lastTimestamp = 0;
+      let avgDelta = 1;
+      let l_rat_window = [];
+      let r_rat_window = [];
+      let l_rat_ema = 0;
+      let r_rat_ema = 0;
+      let blinking = false;
+      let bcounter = 0;
+      let a = 773;
+      let imageCache = [];
+      let audioContext = null;
+      let audioBuffer = null;
+      let currentSource = null;
+
+      function precacheImages() {
+        for (let i = 0; i < 10; i++) {
+          const img = new Image();
+          const filename = "img/" + String(i).padStart(3, "0") + ".png";
+          img.src = filename;
+          imageCache.push(img);
+        }
+      }
+
+      async function loadAudio() {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const response = await fetch("001.mp3");
+        const arrayBuffer = await response.arrayBuffer();
+        audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+      }
+
+      function playAudioFrom(startTime) {
+        if (currentSource) {
+          currentSource.stop();
+        }
+
+        currentSource = audioContext.createBufferSource();
+        currentSource.buffer = audioBuffer;
+        currentSource.loop = true;
+        currentSource.loopStart = 0;
+        currentSource.loopEnd = audioBuffer.duration;
+        currentSource.connect(audioContext.destination);
+
+        const offset = startTime % audioBuffer.duration;
+        currentSource.start(0, offset);
+      }
+
+      async function run() {
+        //await faceapi.loadFaceLandmarkModel("model")
+        await faceapi.loadTinyFaceDetectorModel("model");
+        await faceapi.loadFaceLandmarkTinyModel("model");
+        //await faceapi.loadSsdMobilenetv1Model('model')
+
+        const stream = await navigator.mediaDevices.getUserMedia({ video: {} });
+        const camera = $("#inputVideo").get(0);
+        camera.srcObject = stream;
+
+        precacheImages();
+        await loadAudio();
+      }
+
+      function getSubset(array, subset) {
+        function checkIndexInSubset(value, index) {
+          return subset.includes(index);
+        }
+
+        return array.filter(checkIndexInSubset);
+      }
+
+      function getRatio(points, dim) {
+        var x = dim[0];
+        var y = dim[1];
+        var w = 0;
+        var h = 0;
+
+        for (var i = 0; i < points.length; i++) {
+          point = points[i];
+          if (point._x > w) w = point._x;
+          if (point._x < x) x = point._x;
+          if (point._y > h) h = point._y;
+          if (point._y < y) y = point._y;
+        }
+
+        return [(h - y) / (w - x), x, y, w, h];
+      }
+
+      async function detect() {
+        const camera = $("#inputVideo").get(0);
+        const leftEye = [36, 37, 38, 39, 40, 41];
+        const rightEye = [42, 43, 44, 45, 46, 47];
+
+        if (camera.paused || camera.ended) return setTimeout(() => detect());
+
+        const detection = await faceapi
+          .detectSingleFace(
+            camera,
+            new faceapi.TinyFaceDetectorOptions(512, 0.5)
+          )
+          .withFaceLandmarks(true);
+
+        //const detection = await faceapi.detectSingleFace(camera,
+        //    new faceapi.SsdMobilenetv1Options()).withFaceLandmarks(false)
+
+        if (detection != null) {
+          const canvas = $("#overlay").get(0);
+          const dims = faceapi.matchDimensions(canvas, camera, true);
+          const resizedResult = faceapi.resizeResults(detection, dims);
+
+          const left = getSubset(detection.landmarks.positions, leftEye);
+          const right = getSubset(detection.landmarks.positions, rightEye);
+
+          var canvasWidth = canvas.width;
+          var canvasHeight = canvas.height;
+          var ctx = canvas.getContext("2d");
+          var canvasData = ctx.getImageData(0, 0, canvasWidth, canvasHeight);
+
+          for (var i = 0; i < left.length; i++) {
+            ctx.fillRect(left[i]._x, left[i]._y, 3, 3);
+            ctx.fillRect(right[i]._x, right[i]._y, 3, 3);
+          }
+
+          const [l_rat, lx, ly, lw, lh] = getRatio(left, [5000, 5000]);
+          const [r_rat, rx, ry, rw, rh] = getRatio(right, [5000, 5000]);
+
+          l_rat_window.unshift(l_rat);
+          r_rat_window.unshift(r_rat);
+
+          if (l_rat_window.length > 5) l_rat_window.pop();
+          if (r_rat_window.length > 5) r_rat_window.pop();
+
+          l_rat_ema += (l_rat - l_rat_ema) * 0.2;
+          r_rat_ema += (r_rat - r_rat_ema) * 0.2;
+
+          //console.log(Math.min(...l_rat_window), l_rat_ema)
+
+          if (
+            l_rat_ema > 1.05 * Math.min(...l_rat_window) &&
+            r_rat_ema > 1.05 * Math.min(...r_rat_window)
+          ) {
+            if (blinking == false) {
+              bcounter += 1;
+              a = (a * (a + 1379)) % 1379;
+              console.log(
+                "blink " + bcounter,
+                1000 / avgDelta,
+                l_rat_ema,
+                Math.min(...l_rat_window)
+              );
+              blinking = true;
+
+              blink(bcounter);
+            }
+          } else blinking = false;
+        }
+
+        updateTimeStats(performance.now());
+
+        setTimeout(() => detect());
+      }
+
+      function blink(bcounter) {
+        const randomIndex = Math.floor(Math.random() * 10);
+        const filename = "img/" + String(randomIndex).padStart(3, "0") + ".png";
+        $("#blinkImage").attr("src", filename);
+
+        // Jump to random position in audio
+        if (audioBuffer) {
+          const randomTime = Math.random() * audioBuffer.duration;
+          playAudioFrom(randomTime);
+        }
+      }
+
+      function updateTimeStats(timestamp) {
+        if (lastTimestamp == 0) {
+          lastTimestamp = timestamp;
+        }
+
+        var delta = timestamp - lastTimestamp;
+        lastTimestamp = timestamp;
+        avgDelta = avgDelta * 0.9 + delta * 0.1;
+
+        //console.info(1000 / avgDelta);
+      }
+
+      $(document).ready(function () {
+        run().then(() => {
+          // Start audio playback
+          if (audioBuffer) {
+            playAudioFrom(0);
+          }
+        });
+      });
+    </script>
+
+    <div
+      id="videoContainer"
+      style="position: absolute; top: 0; left: 0; opacity: 0; z-index: 10"
+      class="margin"
+    >
+      <video
+        onloadedmetadata="detect(this)"
+        id="inputVideo"
+        autoplay
+        muted
+        playsinline
+      ></video>
+    </div>
+    <div
+      style="
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+      "
+    >
+      <img
+        id="blinkImage"
+        src="/img/001.jpg"
+        style="width: 100%; height: 100%; object-fit: cover"
+      />
+      <canvas id="overlay" style="position: absolute; top: 0; left: 0" />
+    </div>
+  </body>
+</html>
