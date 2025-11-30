@@ -8,6 +8,7 @@
   </head>
   <body>
     <script>
+      let NUM_IMAGES = 10;
       let lastTimestamp = 0;
       let avgDelta = 1;
       let l_rat_window = [];
@@ -23,7 +24,7 @@
       let currentSource = null;
 
       function precacheImages() {
-        for (let i = 0; i < 10; i++) {
+        for (let i = 0; i < NUM_IMAGES; i++) {
           const img = new Image();
           const filename = "img/" + String(i).padStart(3, "0") + ".png";
           img.src = filename;
@@ -168,7 +169,7 @@
       }
 
       function blink(bcounter) {
-        const randomIndex = Math.floor(Math.random() * 10);
+        const randomIndex = Math.floor(Math.random() * NUM_IMAGES);
         const filename = "img/" + String(randomIndex).padStart(3, "0") + ".png";
         $("#blinkImage").attr("src", filename);
 
@@ -228,7 +229,7 @@
     >
       <img
         id="blinkImage"
-        src="/img/001.jpg"
+        src="img/001.jpg"
         style="width: 100%; height: 100%; object-fit: cover"
       />
       <canvas id="overlay" style="position: absolute; top: 0; left: 0" />
