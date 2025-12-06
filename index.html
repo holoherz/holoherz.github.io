@@ -1,6 +1,7 @@
 <html>
   <head>
     <script src="face-api.js"></script>
+    <script src="rem.js"></script>
     <script
       type="text/javascript"
       src="https://code.jquery.com/jquery-2.1.1.min.js"
@@ -8,7 +9,7 @@
   </head>
   <body>
     <script>
-      let NUM_IMAGES = 10;
+      let NUM_VIDEOS = 3;
       let lastTimestamp = 0;
       let avgDelta = 1;
       let l_rat_window = [];
@@ -17,81 +18,50 @@
       let r_rat_ema = 0;
       let blinking = false;
       let bcounter = 0;
-      let a = 773;
-      let imageCache = [];
+      let videoCache = [];
       let audioContext = null;
       let audioBuffer = null;
       let currentSource = null;
-
-      function precacheImages() {
-        for (let i = 0; i < NUM_IMAGES; i++) {
-          const img = new Image();
-          const filename = "img/" + String(i).padStart(3, "0") + ".png";
-          img.src = filename;
-          imageCache.push(img);
-        }
-      }
-
-      async function loadAudio() {
-        audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        const response = await fetch("001.mp3");
-        const arrayBuffer = await response.arrayBuffer();
-        audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-      }
-
-      function playAudioFrom(startTime) {
-        if (currentSource) {
-          currentSource.stop();
-        }
-
-        currentSource = audioContext.createBufferSource();
-        currentSource.buffer = audioBuffer;
-        currentSource.loop = true;
-        currentSource.loopStart = 0;
-        currentSource.loopEnd = audioBuffer.duration;
-        currentSource.connect(audioContext.destination);
-
-        const offset = startTime % audioBuffer.duration;
-        currentSource.start(0, offset);
-      }
+      let introVideoPlaying = false;
+      let waitingForFirstBlink = false;
+      let appActive = false;
 
       async function run() {
-        //await faceapi.loadFaceLandmarkModel("model")
         await faceapi.loadTinyFaceDetectorModel("model");
         await faceapi.loadFaceLandmarkTinyModel("model");
-        //await faceapi.loadSsdMobilenetv1Model('model')
 
         const stream = await navigator.mediaDevices.getUserMedia({ video: {} });
         const camera = $("#inputVideo").get(0);
         camera.srcObject = stream;
 
-        precacheImages();
-        await loadAudio();
-      }
+        videoCache = precacheVideos(NUM_VIDEOS);
+        const audioData = await loadAudio("001.mp3");
+        audioContext = audioData.audioContext;
+        audioBuffer = audioData.audioBuffer;
 
-      function getSubset(array, subset) {
-        function checkIndexInSubset(value, index) {
-          return subset.includes(index);
+        // Hide loading text and show intro video
+        const loadingContainer = document.getElementById("loadingContainer");
+        const introVideoContainer = document.getElementById("introVideoContainer");
+        const introVideo = document.getElementById("introVideo");
+
+        if (loadingContainer) {
+          loadingContainer.style.display = "none";
         }
 
-        return array.filter(checkIndexInSubset);
-      }
+        if (introVideoContainer && introVideo) {
+          introVideoContainer.style.display = "flex";
+          introVideoPlaying = true;
 
-      function getRatio(points, dim) {
-        var x = dim[0];
-        var y = dim[1];
-        var w = 0;
-        var h = 0;
+          // Set up video end handler
+          introVideo.addEventListener("ended", function() {
+            introVideoPlaying = false;
+            waitingForFirstBlink = true;
+            console.log("Intro video ended. Waiting for first blink...");
+          });
 
-        for (var i = 0; i < points.length; i++) {
-          point = points[i];
-          if (point._x > w) w = point._x;
-          if (point._x < x) x = point._x;
-          if (point._y > h) h = point._y;
-          if (point._y < y) y = point._y;
+          // Start playing the video
+          introVideo.play();
         }
-
-        return [(h - y) / (w - x), x, y, w, h];
       }
 
       async function detect() {
@@ -101,6 +71,12 @@
 
         if (camera.paused || camera.ended) return setTimeout(() => detect());
 
+        // Skip blink detection while intro video is playing
+        if (introVideoPlaying) {
+          setTimeout(() => detect());
+          return;
+        }
+
         const detection = await faceapi
           .detectSingleFace(
             camera,
@@ -108,21 +84,14 @@
           )
           .withFaceLandmarks(true);
 
-        //const detection = await faceapi.detectSingleFace(camera,
-        //    new faceapi.SsdMobilenetv1Options()).withFaceLandmarks(false)
-
         if (detection != null) {
           const canvas = $("#overlay").get(0);
-          const dims = faceapi.matchDimensions(canvas, camera, true);
-          const resizedResult = faceapi.resizeResults(detection, dims);
+          faceapi.matchDimensions(canvas, camera, true);
 
           const left = getSubset(detection.landmarks.positions, leftEye);
           const right = getSubset(detection.landmarks.positions, rightEye);
 
-          var canvasWidth = canvas.width;
-          var canvasHeight = canvas.height;
           var ctx = canvas.getContext("2d");
-          var canvasData = ctx.getImageData(0, 0, canvasWidth, canvasHeight);
 
           for (var i = 0; i < left.length; i++) {
             ctx.fillRect(left[i]._x, left[i]._y, 3, 3);
@@ -141,15 +110,12 @@
           l_rat_ema += (l_rat - l_rat_ema) * 0.2;
           r_rat_ema += (r_rat - r_rat_ema) * 0.2;
 
-          //console.log(Math.min(...l_rat_window), l_rat_ema)
-
           if (
             l_rat_ema > 1.05 * Math.min(...l_rat_window) &&
             r_rat_ema > 1.05 * Math.min(...r_rat_window)
           ) {
             if (blinking == false) {
               bcounter += 1;
-              a = (a * (a + 1379)) % 1379;
               console.log(
                 "blink " + bcounter,
                 1000 / avgDelta,
@@ -158,47 +124,46 @@
               );
               blinking = true;
 
-              blink(bcounter);
+              // Handle first blink after intro video
+              if (waitingForFirstBlink) {
+                console.log("First blink detected! Activating app...");
+                waitingForFirstBlink = false;
+                appActive = true;
+
+                // Hide intro video
+                const introVideoContainer = document.getElementById("introVideoContainer");
+                if (introVideoContainer) {
+                  introVideoContainer.style.display = "none";
+                }
+
+                // Show main content
+                const mainContent = document.getElementById("mainContent");
+                if (mainContent) {
+                  mainContent.style.display = "flex";
+                }
+
+                // Start audio playback
+                if (audioBuffer && audioContext) {
+                  currentSource = playAudioFrom(audioContext, audioBuffer, currentSource, 0);
+                }
+              }
+              // Normal blink behavior when app is active
+              else if (appActive) {
+                currentSource = blink(bcounter, NUM_VIDEOS, audioBuffer, audioContext, currentSource);
+              }
             }
           } else blinking = false;
         }
 
-        updateTimeStats(performance.now());
+        const timeStats = updateTimeStats(lastTimestamp, avgDelta, performance.now());
+        lastTimestamp = timeStats.lastTimestamp;
+        avgDelta = timeStats.avgDelta;
 
         setTimeout(() => detect());
       }
 
-      function blink(bcounter) {
-        const randomIndex = Math.floor(Math.random() * NUM_IMAGES);
-        const filename = "img/" + String(randomIndex).padStart(3, "0") + ".png";
-        $("#blinkImage").attr("src", filename);
-
-        // Jump to random position in audio
-        if (audioBuffer) {
-          const randomTime = Math.random() * audioBuffer.duration;
-          playAudioFrom(randomTime);
-        }
-      }
-
-      function updateTimeStats(timestamp) {
-        if (lastTimestamp == 0) {
-          lastTimestamp = timestamp;
-        }
-
-        var delta = timestamp - lastTimestamp;
-        lastTimestamp = timestamp;
-        avgDelta = avgDelta * 0.9 + delta * 0.1;
-
-        //console.info(1000 / avgDelta);
-      }
-
       $(document).ready(function () {
-        run().then(() => {
-          // Start audio playback
-          if (audioBuffer) {
-            playAudioFrom(0);
-          }
-        });
+        run();
       });
     </script>
 
@@ -216,6 +181,7 @@
       ></video>
     </div>
     <div
+      id="mainContent"
       style="
         position: fixed;
         top: 0;
@@ -225,14 +191,63 @@
         margin: 0;
         padding: 0;
         overflow: hidden;
+        display: none;
+        background: black;
+        align-items: center;
+        justify-content: center;
       "
     >
-      <img
-        id="blinkImage"
-        src="img/001.png"
-        style="width: 100%; height: 100%; object-fit: cover"
-      />
+      <video
+        id="blinkVideo"
+        src="vid/001.mp4"
+        autoplay
+        loop
+        muted
+        playsinline
+      ></video>
       <canvas id="overlay" style="position: absolute; top: 0; left: 0" />
+    </div>
+    <div
+      id="loadingContainer"
+      style="
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: black;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+        color: white;
+        font-family: monospace;
+        font-size: 24px;
+      "
+    >
+      loading
+    </div>
+    <div
+      id="introVideoContainer"
+      style="
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: black;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 999;
+      "
+    >
+      <video
+        id="introVideo"
+        src="0001.mp4"
+        muted
+        playsinline
+      ></video>
     </div>
   </body>
 </html>
