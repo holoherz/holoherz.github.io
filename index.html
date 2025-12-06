@@ -9,7 +9,10 @@
   </head>
   <body>
     <script>
-      let NUM_VIDEOS = 3;
+      const NUM_VIDEOS = 3;
+      const AUDIO_START_BLINK = 10;  // Start audio playback on this blink
+      const AUDIO_JUMP_START_BLINK = 30;  // Start random audio jumping on this blink
+
       let lastTimestamp = 0;
       let avgDelta = 1;
       let l_rat_window = [];
@@ -21,10 +24,16 @@
       let videoCache = [];
       let audioContext = null;
       let audioBuffer = null;
-      let currentSource = null;
+      let audioSource1 = null;
+      let audioSource2 = null;
+      let gainNode1 = null;
+      let gainNode2 = null;
+      let activeAudioIndex = 1; // Track which audio source is active (1 or 2)
       let introVideoPlaying = false;
       let waitingForFirstBlink = false;
       let appActive = false;
+      let activeVideoIndex = 1; // Track which video element is currently visible (1 or 2)
+      let currentVideoIndex = 0; // Track which video content is playing (0-based: 0=001.mp4, 1=002.mp4, 2=003.mp4)
 
       async function run() {
         await faceapi.loadTinyFaceDetectorModel("model");
@@ -38,6 +47,11 @@
         const audioData = await loadAudio("001.mp3");
         audioContext = audioData.audioContext;
         audioBuffer = audioData.audioBuffer;
+
+        // Initialize gain nodes for audio crossfading
+        const gainNodes = initializeGainNodes(audioContext);
+        gainNode1 = gainNodes.gainNode1;
+        gainNode2 = gainNodes.gainNode2;
 
         // Hide loading text and show intro video
         const loadingContainer = document.getElementById("loadingContainer");
@@ -136,20 +150,51 @@
                   introVideoContainer.style.display = "none";
                 }
 
-                // Show main content
+                // Show main content and initialize both videos
                 const mainContent = document.getElementById("mainContent");
                 if (mainContent) {
                   mainContent.style.display = "flex";
                 }
 
-                // Start audio playback
-                if (audioBuffer && audioContext) {
-                  currentSource = playAudioFrom(audioContext, audioBuffer, currentSource, 0);
+                // Initialize video1 (already has src vid/001.mp4)
+                const video1 = document.getElementById("blinkVideo1");
+                if (video1) {
+                  video1.play();
                 }
+
+                // Audio will start on AUDIO_START_BLINK (blink 10)
               }
               // Normal blink behavior when app is active
               else if (appActive) {
-                currentSource = blink(bcounter, NUM_VIDEOS, audioBuffer, audioContext, currentSource);
+                // Determine audio action based on blink count
+                let audioAction = 'none';
+                if (bcounter === AUDIO_START_BLINK) {
+                  audioAction = 'start';
+                  console.log("Blink " + bcounter + ": Starting audio playback");
+                } else if (bcounter >= AUDIO_JUMP_START_BLINK) {
+                  audioAction = 'jump';
+                }
+
+                const result = blink(
+                  bcounter,
+                  NUM_VIDEOS,
+                  audioBuffer,
+                  audioContext,
+                  audioSource1,
+                  audioSource2,
+                  gainNode1,
+                  gainNode2,
+                  activeAudioIndex,
+                  activeVideoIndex,
+                  audioAction,
+                  currentVideoIndex
+                );
+
+                audioSource1 = result.audioSource1;
+                audioSource2 = result.audioSource2;
+                activeAudioIndex = result.activeAudioIndex;
+                activeVideoIndex = result.activeVideoIndex;
+                currentVideoIndex = result.currentVideoIndex;
               }
             }
           } else blinking = false;
@@ -198,14 +243,22 @@
       "
     >
       <video
-        id="blinkVideo"
+        id="blinkVideo1"
         src="vid/001.mp4"
-        autoplay
         loop
         muted
         playsinline
+        style="position: absolute; z-index: 2; opacity: 1"
       ></video>
-      <canvas id="overlay" style="position: absolute; top: 0; left: 0" />
+      <video
+        id="blinkVideo2"
+        src="vid/002.mp4"
+        loop
+        muted
+        playsinline
+        style="position: absolute; z-index: 1; opacity: 0"
+      ></video>
+      <canvas id="overlay" style="position: absolute; top: 0; left: 0; z-index: 3" />
     </div>
     <div
       id="loadingContainer"
