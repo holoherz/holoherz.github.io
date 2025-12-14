@@ -199,11 +199,8 @@ function blink(bcounter, numVideos, audioBuffer, audioContext, audioSource1, aud
   const inactiveIndex = activeVideoIndex === 1 ? 2 : 1;
   const inactiveVideo = document.getElementById("blinkVideo" + inactiveIndex);
 
-  // Select a random video different from the current one
-  let newVideoIndex;
-  do {
-    newVideoIndex = Math.floor(Math.random() * numVideos);
-  } while (newVideoIndex === currentVideoIndex && numVideos > 1);
+  // Increment to next video sequentially, wrap back to 0 after last video
+  const newVideoIndex = (currentVideoIndex + 1) % numVideos;
 
   const filename = "vid/" + String(newVideoIndex + 1).padStart(3, "0") + ".mp4";
 
