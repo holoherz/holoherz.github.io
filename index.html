@@ -10,8 +10,8 @@
   <body>
     <script>
       const NUM_VIDEOS = 50;
-      const AUDIO_START_BLINK = 10;  // Start audio playback on this blink
-      const AUDIO_JUMP_START_BLINK = 30;  // Start random audio jumping on this blink
+      const AUDIO_START_BLINK = 10; // Start audio playback on this blink
+      const AUDIO_JUMP_START_BLINK = 30; // Start random audio jumping on this blink
 
       let lastTimestamp = 0;
       let avgDelta = 1;
@@ -29,9 +29,6 @@
       let gainNode1 = null;
       let gainNode2 = null;
       let activeAudioIndex = 1; // Track which audio source is active (1 or 2)
-      let introVideoPlaying = false;
-      let waitingForFirstBlink = false;
-      let appActive = false;
       let activeVideoIndex = 1; // Track which video element is currently visible (1 or 2)
       let currentVideoIndex = 0; // Track which video content is playing (0-based: 0=001.mp4, 1=002.mp4, 2=003.mp4)
 
@@ -53,28 +50,29 @@
         gainNode1 = gainNodes.gainNode1;
         gainNode2 = gainNodes.gainNode2;
 
-        // Hide loading text and show intro video
+        // Hide loading text and show main content immediately
         const loadingContainer = document.getElementById("loadingContainer");
-        const introVideoContainer = document.getElementById("introVideoContainer");
-        const introVideo = document.getElementById("introVideo");
-
         if (loadingContainer) {
           loadingContainer.style.display = "none";
         }
 
-        if (introVideoContainer && introVideo) {
-          introVideoContainer.style.display = "flex";
-          introVideoPlaying = true;
+        // Show main content with first video
+        const mainContent = document.getElementById("mainContent");
+        if (mainContent) {
+          mainContent.style.display = "flex";
+        }
 
-          // Set up video end handler
-          introVideo.addEventListener("ended", function() {
-            introVideoPlaying = false;
-            waitingForFirstBlink = true;
-            console.log("Intro video ended. Waiting for first blink...");
-          });
+        // Start with the first video (001.mp4)
+        currentVideoIndex = 0;
+        const firstFilename =
+          "vid/" + String(currentVideoIndex + 1).padStart(3, "0") + ".mp4";
 
-          // Start playing the video
-          introVideo.play();
+        // Initialize video1 with first video
+        const video1 = document.getElementById("blinkVideo1");
+        if (video1) {
+          video1.src = firstFilename;
+          video1.load();
+          video1.play();
         }
       }
 
@@ -84,12 +82,6 @@
         const rightEye = [42, 43, 44, 45, 46, 47];
 
         if (camera.paused || camera.ended) return setTimeout(() => detect());
-
-        // Skip blink detection while intro video is playing
-        if (introVideoPlaying) {
-          setTimeout(() => detect());
-          return;
-        }
 
         const detection = await faceapi
           .detectSingleFace(
@@ -138,69 +130,44 @@
               );
               blinking = true;
 
-              // Handle first blink after intro video
-              if (waitingForFirstBlink) {
-                console.log("First blink detected! Activating app...");
-                waitingForFirstBlink = false;
-                appActive = true;
-
-                // Hide intro video
-                const introVideoContainer = document.getElementById("introVideoContainer");
-                if (introVideoContainer) {
-                  introVideoContainer.style.display = "none";
-                }
-
-                // Show main content and initialize both videos
-                const mainContent = document.getElementById("mainContent");
-                if (mainContent) {
-                  mainContent.style.display = "flex";
-                }
-
-                // Initialize video1 (already has src vid/001.mp4)
-                const video1 = document.getElementById("blinkVideo1");
-                if (video1) {
-                  video1.play();
-                }
-
-                // Audio will start on AUDIO_START_BLINK (blink 10)
+              // Determine audio action based on blink count
+              let audioAction = "none";
+              if (bcounter === AUDIO_START_BLINK) {
+                audioAction = "start";
+                console.log("Blink " + bcounter + ": Starting audio playback");
+              } else if (bcounter >= AUDIO_JUMP_START_BLINK) {
+                audioAction = "jump";
               }
-              // Normal blink behavior when app is active
-              else if (appActive) {
-                // Determine audio action based on blink count
-                let audioAction = 'none';
-                if (bcounter === AUDIO_START_BLINK) {
-                  audioAction = 'start';
-                  console.log("Blink " + bcounter + ": Starting audio playback");
-                } else if (bcounter >= AUDIO_JUMP_START_BLINK) {
-                  audioAction = 'jump';
-                }
 
-                const result = blink(
-                  bcounter,
-                  NUM_VIDEOS,
-                  audioBuffer,
-                  audioContext,
-                  audioSource1,
-                  audioSource2,
-                  gainNode1,
-                  gainNode2,
-                  activeAudioIndex,
-                  activeVideoIndex,
-                  audioAction,
-                  currentVideoIndex
-                );
+              const result = blink(
+                bcounter,
+                NUM_VIDEOS,
+                audioBuffer,
+                audioContext,
+                audioSource1,
+                audioSource2,
+                gainNode1,
+                gainNode2,
+                activeAudioIndex,
+                activeVideoIndex,
+                audioAction,
+                currentVideoIndex
+              );
 
-                audioSource1 = result.audioSource1;
-                audioSource2 = result.audioSource2;
-                activeAudioIndex = result.activeAudioIndex;
-                activeVideoIndex = result.activeVideoIndex;
-                currentVideoIndex = result.currentVideoIndex;
-              }
+              audioSource1 = result.audioSource1;
+              audioSource2 = result.audioSource2;
+              activeAudioIndex = result.activeAudioIndex;
+              activeVideoIndex = result.activeVideoIndex;
+              currentVideoIndex = result.currentVideoIndex;
             }
           } else blinking = false;
         }
 
-        const timeStats = updateTimeStats(lastTimestamp, avgDelta, performance.now());
+        const timeStats = updateTimeStats(
+          lastTimestamp,
+          avgDelta,
+          performance.now()
+        );
         lastTimestamp = timeStats.lastTimestamp;
         avgDelta = timeStats.avgDelta;
 
@@ -244,7 +211,6 @@
     >
       <video
         id="blinkVideo1"
-        src="vid/001.mp4"
         loop
         muted
         playsinline
@@ -252,13 +218,15 @@
       ></video>
       <video
         id="blinkVideo2"
-        src="vid/002.mp4"
         loop
         muted
         playsinline
         style="position: absolute; z-index: 1; opacity: 0"
       ></video>
-      <canvas id="overlay" style="position: absolute; top: 0; left: 0; z-index: 3" />
+      <canvas
+        id="overlay"
+        style="position: absolute; top: 0; left: 0; z-index: 3"
+      />
     </div>
     <div
       id="loadingContainer"
@@ -279,28 +247,6 @@
       "
     >
       loading
-    </div>
-    <div
-      id="introVideoContainer"
-      style="
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100vw;
-        height: 100vh;
-        background: black;
-        display: none;
-        align-items: center;
-        justify-content: center;
-        z-index: 999;
-      "
-    >
-      <video
-        id="introVideo"
-        src="0001.mp4"
-        muted
-        playsinline
-      ></video>
     </div>
   </body>
 </html>
