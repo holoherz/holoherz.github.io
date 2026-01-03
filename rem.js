@@ -199,24 +199,23 @@ function blink(bcounter, numVideos, audioBuffer, audioContext, audioSource1, aud
   const inactiveIndex = activeVideoIndex === 1 ? 2 : 1;
   const inactiveVideo = document.getElementById("blinkVideo" + inactiveIndex);
 
-  // Increment to next video sequentially, wrap back to 0 after last video
+  // The inactive video already has the next video preloaded
+  // Increment to next video sequentially (this is what's already loaded in inactive)
   const newVideoIndex = (currentVideoIndex + 1) % numVideos;
 
-  const filename = "vid/" + String(newVideoIndex + 1).padStart(3, "0") + ".mp4";
-
   if (inactiveVideo && activeVideo) {
-    // Load new video into the inactive element
-    inactiveVideo.src = filename;
-    inactiveVideo.load();
+    // Immediately swap to show the preloaded video
+    inactiveVideo.play();
+    inactiveVideo.style.opacity = "1";
+    inactiveVideo.style.zIndex = "2";
+    activeVideo.style.opacity = "0";
+    activeVideo.style.zIndex = "1";
 
-    // When loaded, swap visibility
-    inactiveVideo.onloadeddata = function() {
-      inactiveVideo.play();
-      inactiveVideo.style.opacity = "1";
-      inactiveVideo.style.zIndex = "2";
-      activeVideo.style.opacity = "0";
-      activeVideo.style.zIndex = "1";
-    };
+    // Now preload the NEXT video (after the one we just switched to) into the now-inactive element
+    const nextVideoIndex = (newVideoIndex + 1) % numVideos;
+    const nextFilename = "vid/" + String(nextVideoIndex + 1).padStart(3, "0") + ".mp4";
+    activeVideo.src = nextFilename;
+    activeVideo.load();
   }
 
   // Handle audio based on action
