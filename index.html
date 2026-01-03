@@ -10,8 +10,8 @@
   <body>
     <script>
       const NUM_VIDEOS = 50;
-      const AUDIO_START_BLINK = 8; // Start audio playback on this blink
-      const AUDIO_JUMP_START_BLINK = 15; // Start random audio jumping on this blink
+      const AUDIO_START_BLINK = 10; // Start audio playback on this blink
+      const AUDIO_JUMP_START_BLINK = 30; // Start random audio jumping on this blink
 
       let lastTimestamp = 0;
       let avgDelta = 1;
@@ -62,17 +62,28 @@
           mainContent.style.display = "flex";
         }
 
-        // Start with the first video (001.mp4)
+        // Start with the first video (001.mp4) visible, second video (002.mp4) preloaded
         currentVideoIndex = 0;
         const firstFilename =
           "vid/" + String(currentVideoIndex + 1).padStart(3, "0") + ".mp4";
+        const secondFilename =
+          "vid/" +
+          String(((currentVideoIndex + 1) % NUM_VIDEOS) + 1).padStart(3, "0") +
+          ".mp4";
 
-        // Initialize video1 with first video
+        // Initialize video1 with first video (visible)
         const video1 = document.getElementById("blinkVideo1");
         if (video1) {
           video1.src = firstFilename;
           video1.load();
           video1.play();
+        }
+
+        // Preload video2 with second video (hidden, ready for first blink)
+        const video2 = document.getElementById("blinkVideo2");
+        if (video2) {
+          video2.src = secondFilename;
+          video2.load();
         }
       }
 
@@ -92,18 +103,19 @@
 
         if (detection != null) {
           // Debug rendering (commented out for production)
-          // const canvas = $("#overlay").get(0);
-          // faceapi.matchDimensions(canvas, camera, true);
+          const canvas = $("#overlay").get(0);
+          faceapi.matchDimensions(canvas, camera, true);
 
           const left = getSubset(detection.landmarks.positions, leftEye);
           const right = getSubset(detection.landmarks.positions, rightEye);
 
           // Debug: Draw eye landmark points
-          // var ctx = canvas.getContext("2d");
-          // for (var i = 0; i < left.length; i++) {
-          //   ctx.fillRect(left[i]._x, left[i]._y, 3, 3);
-          //   ctx.fillRect(right[i]._x, right[i]._y, 3, 3);
-          // }
+          var ctx = canvas.getContext("2d");
+          ctx.fillStyle = "white";
+          for (var i = 0; i < left.length; i++) {
+            ctx.fillRect(left[i]._x, left[i]._y, 3, 3);
+            ctx.fillRect(right[i]._x, right[i]._y, 3, 3);
+          }
 
           const [l_rat, lx, ly, lw, lh] = getRatio(left, [5000, 5000]);
           const [r_rat, rx, ry, rw, rh] = getRatio(right, [5000, 5000]);
@@ -226,7 +238,7 @@
       ></video>
       <canvas
         id="overlay"
-        style="position: absolute; top: 0; left: 0; z-index: 3"
+        style="position: absolute; top: 0; left: 0; z-index: 10"
       />
     </div>
     <div
@@ -247,13 +259,12 @@
         font-size: 24px;
       "
     >
-      For a better experience we suggest you to turn on the lights,<br />
-      Check your loudspeakers,<br />
+      Better to turn the lights on.<br />
+      Check your loudspeakers.<br />
       Seat straight in front of your screen so the camera can observe you
-      clearly,<br />
-     And enjoy the generative experience you are about to watch<br />
+      clearly.<br />
       <br />
-      Loading...
+      Loading.
     </div>
   </body>
 </html>
