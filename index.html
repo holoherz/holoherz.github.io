@@ -92,18 +92,18 @@
 
         if (detection != null) {
           // Debug rendering (commented out for production)
-          const canvas = $("#overlay").get(0);
-          faceapi.matchDimensions(canvas, camera, true);
+          // const canvas = $("#overlay").get(0);
+          // faceapi.matchDimensions(canvas, camera, true);
 
           const left = getSubset(detection.landmarks.positions, leftEye);
           const right = getSubset(detection.landmarks.positions, rightEye);
 
           // Debug: Draw eye landmark points
-          var ctx = canvas.getContext("2d");
-          for (var i = 0; i < left.length; i++) {
-            ctx.fillRect(left[i]._x, left[i]._y, 3, 3);
-            ctx.fillRect(right[i]._x, right[i]._y, 3, 3);
-          }
+          // var ctx = canvas.getContext("2d");
+          // for (var i = 0; i < left.length; i++) {
+          //   ctx.fillRect(left[i]._x, left[i]._y, 3, 3);
+          //   ctx.fillRect(right[i]._x, right[i]._y, 3, 3);
+          // }
 
           const [l_rat, lx, ly, lw, lh] = getRatio(left, [5000, 5000]);
           const [r_rat, rx, ry, rw, rh] = getRatio(right, [5000, 5000]);
