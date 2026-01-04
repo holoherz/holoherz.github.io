@@ -16,26 +16,28 @@ function getSubset(array, subset) {
 }
 
 /**
- * Calculates the aspect ratio (height/width) of a bounding box around points
- * @param {Array} points - Array of landmark points with _x and _y properties
- * @param {Array} dim - Initial [x, y] dimensions for comparison
- * @returns {Array} [ratio, minX, minY, maxX, maxY]
+ * Calculates the Eye Aspect Ratio (EAR) using landmark distances
+ * @param {Array} points - Array of 6 eye landmark points with _x and _y properties
+ * @returns {number} Eye aspect ratio (height/width)
  */
-function getRatio(points, dim) {
-  var x = dim[0];
-  var y = dim[1];
-  var w = 0;
-  var h = 0;
+function getRatio(points) {
+  // Helper function to calculate Euclidean distance between two points
+  const distance = (p1, p2) => {
+    const dx = p2._x - p1._x;
+    const dy = p2._y - p1._y;
+    return Math.sqrt(dx * dx + dy * dy);
+  };
 
-  for (var i = 0; i < points.length; i++) {
-    point = points[i];
-    if (point._x > w) w = point._x;
-    if (point._x < x) x = point._x;
-    if (point._y > h) h = point._y;
-    if (point._y < y) y = point._y;
-  }
+  // Width: distance between outer corner (0) and inner corner (3)
+  const width = distance(points[0], points[3]);
 
-  return [(h - y) / (w - x), x, y, w, h];
+  // Height: average of two vertical distances
+  const height1 = distance(points[1], points[5]); // Top-left to bottom-left
+  const height2 = distance(points[2], points[4]); // Top-right to bottom-right
+  const height = (height1 + height2) / 2;
+
+  // Return aspect ratio
+  return height / width;
 }
 
 /**
@@ -120,7 +122,15 @@ function playAudioFrom(audioContext, audioBuffer, currentSource, startTime) {
  * @param {number} crossfadeDuration - Crossfade duration in seconds (default 0.005)
  * @returns {AudioBufferSourceNode} New audio source node
  */
-function playAudioWithCrossfade(audioContext, audioBuffer, activeSource, activeGain, inactiveGain, startTime, crossfadeDuration = 0.005) {
+function playAudioWithCrossfade(
+  audioContext,
+  audioBuffer,
+  activeSource,
+  activeGain,
+  inactiveGain,
+  startTime,
+  crossfadeDuration = 0.005
+) {
   const now = audioContext.currentTime;
   const offset = startTime % audioBuffer.duration;
 
@@ -177,6 +187,101 @@ function updateTimeStats(lastTimestamp, avgDelta, timestamp) {
 }
 
 /**
+ * Draws debug visualization of eye landmarks on canvas
+ * @param {HTMLCanvasElement} canvas - Canvas element to draw on
+ * @param {Array} leftEyePoints - Array of left eye landmark points
+ * @param {Array} rightEyePoints - Array of right eye landmark points
+ */
+function drawDebugLandmarks(canvas, leftEyePoints, rightEyePoints) {
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "white";
+
+  // Draw left eye landmarks
+  for (let i = 0; i < leftEyePoints.length; i++) {
+    ctx.fillRect(leftEyePoints[i]._x, leftEyePoints[i]._y, 3, 3);
+  }
+
+  // Draw right eye landmarks
+  for (let i = 0; i < rightEyePoints.length; i++) {
+    ctx.fillRect(rightEyePoints[i]._x, rightEyePoints[i]._y, 3, 3);
+  }
+}
+
+/**
+ * Draws a chart showing the history of eye aspect ratios
+ * @param {HTMLCanvasElement} canvas - Canvas element to draw on
+ * @param {Array} lRatHistory - History of left eye aspect ratios (last 100 values)
+ * @param {Array} rRatHistory - History of right eye aspect ratios (last 100 values)
+ */
+function drawRatioChart(canvas, lRatHistory, rRatHistory) {
+  if (lRatHistory.length < 2 && rRatHistory.length < 2) return;
+
+  const ctx = canvas.getContext("2d");
+  const chartX = 20;
+  const chartY = 20;
+  const chartWidth = 300;
+  const chartHeight = 150;
+
+  // Draw chart background
+  ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+  ctx.fillRect(chartX, chartY, chartWidth, chartHeight);
+
+  // Draw chart border
+  ctx.strokeStyle = "white";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(chartX, chartY, chartWidth, chartHeight);
+
+  // Find min/max for scaling
+  const allValues = [...lRatHistory, ...rRatHistory];
+  const minRat = Math.min(...allValues);
+  const maxRat = Math.max(...allValues);
+  const range = maxRat - minRat || 1;
+
+  // Helper function to scale and position points
+  const scaleY = (value) => {
+    return chartY + chartHeight - ((value - minRat) / range) * chartHeight;
+  };
+  const scaleX = (index, total) => {
+    return chartX + (index / Math.max(total - 1, 1)) * chartWidth;
+  };
+
+  // Draw left eye ratio (red)
+  if (lRatHistory.length > 1) {
+    ctx.strokeStyle = "red";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(scaleX(0, lRatHistory.length), scaleY(lRatHistory[0]));
+    for (let i = 1; i < lRatHistory.length; i++) {
+      ctx.lineTo(scaleX(i, lRatHistory.length), scaleY(lRatHistory[i]));
+    }
+    ctx.stroke();
+  }
+
+  // Draw right eye ratio (cyan)
+  if (rRatHistory.length > 1) {
+    ctx.strokeStyle = "cyan";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(scaleX(0, rRatHistory.length), scaleY(rRatHistory[0]));
+    for (let i = 1; i < rRatHistory.length; i++) {
+      ctx.lineTo(scaleX(i, rRatHistory.length), scaleY(rRatHistory[i]));
+    }
+    ctx.stroke();
+  }
+
+  // Draw labels
+  ctx.fillStyle = "white";
+  ctx.font = "12px monospace";
+  ctx.fillText("L_RAT", chartX + 5, chartY + 15);
+  ctx.fillStyle = "red";
+  ctx.fillRect(chartX + 50, chartY + 7, 15, 10);
+  ctx.fillStyle = "white";
+  ctx.fillText("R_RAT", chartX + 70, chartY + 15);
+  ctx.fillStyle = "cyan";
+  ctx.fillRect(chartX + 115, chartY + 7, 15, 10);
+}
+
+/**
  * Handles blink event - displays random video and optionally controls audio
  * Uses dual video elements for seamless transitions and dual audio sources with crossfading
  * @param {number} bcounter - Current blink count
@@ -193,7 +298,20 @@ function updateTimeStats(lastTimestamp, avgDelta, timestamp) {
  * @param {number} currentVideoIndex - Currently playing video content (0-based index)
  * @returns {Object} { audioSource1, audioSource2, activeAudioIndex, activeVideoIndex, currentVideoIndex }
  */
-function blink(bcounter, numVideos, audioBuffer, audioContext, audioSource1, audioSource2, gainNode1, gainNode2, activeAudioIndex, activeVideoIndex, audioAction, currentVideoIndex) {
+function blink(
+  bcounter,
+  numVideos,
+  audioBuffer,
+  audioContext,
+  audioSource1,
+  audioSource2,
+  gainNode1,
+  gainNode2,
+  activeAudioIndex,
+  activeVideoIndex,
+  audioAction,
+  currentVideoIndex
+) {
   // Get both video elements
   const activeVideo = document.getElementById("blinkVideo" + activeVideoIndex);
   const inactiveIndex = activeVideoIndex === 1 ? 2 : 1;
@@ -213,7 +331,8 @@ function blink(bcounter, numVideos, audioBuffer, audioContext, audioSource1, aud
 
     // Now preload the NEXT video (after the one we just switched to) into the now-inactive element
     const nextVideoIndex = (newVideoIndex + 1) % numVideos;
-    const nextFilename = "vid/" + String(nextVideoIndex + 1).padStart(3, "0") + ".mp4";
+    const nextFilename =
+      "vid/" + String(nextVideoIndex + 1).padStart(3, "0") + ".mp4";
     activeVideo.src = nextFilename;
     activeVideo.load();
   }
@@ -224,7 +343,7 @@ function blink(bcounter, numVideos, audioBuffer, audioContext, audioSource1, aud
   let newActiveAudioIndex = activeAudioIndex;
 
   if (audioBuffer && audioContext && gainNode1 && gainNode2) {
-    if (audioAction === 'start') {
+    if (audioAction === "start") {
       // Start audio from beginning on source 1
       const source = audioContext.createBufferSource();
       source.buffer = audioBuffer;
@@ -239,7 +358,7 @@ function blink(bcounter, numVideos, audioBuffer, audioContext, audioSource1, aud
 
       newAudioSource1 = source;
       newActiveAudioIndex = 1;
-    } else if (audioAction === 'jump') {
+    } else if (audioAction === "jump") {
       // Jump to random position with crossfade
       const randomTime = Math.random() * audioBuffer.duration;
       const activeSource = activeAudioIndex === 1 ? audioSource1 : audioSource2;
@@ -271,6 +390,6 @@ function blink(bcounter, numVideos, audioBuffer, audioContext, audioSource1, aud
     audioSource2: newAudioSource2,
     activeAudioIndex: newActiveAudioIndex,
     activeVideoIndex: inactiveIndex,
-    currentVideoIndex: newVideoIndex
+    currentVideoIndex: newVideoIndex,
   };
 }
