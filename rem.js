@@ -269,6 +269,20 @@ function drawRatioChart(canvas, lRatHistory, rRatHistory) {
     ctx.stroke();
   }
 
+  // Draw threshold line at 1.05 (blue)
+  const thresholdValue = 1.05;
+  if (thresholdValue >= minRat && thresholdValue <= maxRat) {
+    const thresholdY = scaleY(thresholdValue);
+    ctx.strokeStyle = "blue";
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 5]); // Dashed line
+    ctx.beginPath();
+    ctx.moveTo(chartX, thresholdY);
+    ctx.lineTo(chartX + chartWidth, thresholdY);
+    ctx.stroke();
+    ctx.setLineDash([]); // Reset to solid line
+  }
+
   // Draw labels
   ctx.fillStyle = "white";
   ctx.font = "12px monospace";
@@ -279,6 +293,10 @@ function drawRatioChart(canvas, lRatHistory, rRatHistory) {
   ctx.fillText("R_RAT", chartX + 70, chartY + 15);
   ctx.fillStyle = "cyan";
   ctx.fillRect(chartX + 115, chartY + 7, 15, 10);
+  ctx.fillStyle = "white";
+  ctx.fillText("THRESHOLD", chartX + 135, chartY + 15);
+  ctx.fillStyle = "blue";
+  ctx.fillRect(chartX + 205, chartY + 7, 15, 10);
 }
 
 /**
