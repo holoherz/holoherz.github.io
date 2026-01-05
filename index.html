@@ -79,13 +79,13 @@
           mainContent.style.display = "flex";
         }
 
-        // Start with the first video (001.mp4) visible, second video (002.mp4) preloaded
+        // Start with the first video (000.mp4) visible, second video (001.mp4) preloaded
         currentVideoIndex = 0;
         const firstFilename =
-          "vid/" + String(currentVideoIndex + 1).padStart(3, "0") + ".mp4";
+          "vid/" + String(currentVideoIndex).padStart(3, "0") + ".mp4";
         const secondFilename =
           "vid/" +
-          String(((currentVideoIndex + 1) % NUM_VIDEOS) + 1).padStart(3, "0") +
+          String((currentVideoIndex + 1) % NUM_VIDEOS).padStart(3, "0") +
           ".mp4";
 
         // Initialize video1 with first video (visible)
