@@ -3,6 +3,23 @@
  */
 
 /**
+ * Calculates Euclidean distance between two points
+ * @param {Object} p1 - First point with x/y or _x/_y properties
+ * @param {Object} p2 - Second point with x/y or _x/_y properties
+ * @returns {number} Euclidean distance
+ */
+function euclideanDistance(p1, p2) {
+  const x1 = p1.x !== undefined ? p1.x : p1._x;
+  const y1 = p1.y !== undefined ? p1.y : p1._y;
+  const x2 = p2.x !== undefined ? p2.x : p2._x;
+  const y2 = p2.y !== undefined ? p2.y : p2._y;
+
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+/**
  * Filters an array by returning only elements at specified indices
  * @param {Array} array - Source array
  * @param {Array} subset - Array of indices to keep
@@ -21,19 +38,12 @@ function getSubset(array, subset) {
  * @returns {number} Eye aspect ratio (height/width)
  */
 function getRatio(points) {
-  // Helper function to calculate Euclidean distance between two points
-  const distance = (p1, p2) => {
-    const dx = p2._x - p1._x;
-    const dy = p2._y - p1._y;
-    return Math.sqrt(dx * dx + dy * dy);
-  };
-
   // Width: distance between outer corner (0) and inner corner (3)
-  const width = distance(points[0], points[3]);
+  const width = euclideanDistance(points[0], points[3]);
 
   // Height: average of two vertical distances
-  const height1 = distance(points[1], points[5]); // Top-left to bottom-left
-  const height2 = distance(points[2], points[4]); // Top-right to bottom-right
+  const height1 = euclideanDistance(points[1], points[5]); // Top-left to bottom-left
+  const height2 = euclideanDistance(points[2], points[4]); // Top-right to bottom-right
   const height = (height1 + height2) / 2;
 
   // Return aspect ratio
