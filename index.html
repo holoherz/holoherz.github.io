@@ -33,6 +33,10 @@
       let currentVideoIndex = 0; // Track which video content is playing (0-based: 0=001.mp4, 1=002.mp4, 2=003.mp4)
       let l_rat_history = []; // History of left eye aspect ratios for debug chart
       let r_rat_history = []; // History of right eye aspect ratios for debug chart
+      let prev_left_0 = null; // Previous position of left eye landmark 0 (outer corner)
+      let prev_left_3 = null; // Previous position of left eye landmark 3 (inner corner)
+      let prev_right_0 = null; // Previous position of right eye landmark 0 (outer corner)
+      let prev_right_3 = null; // Previous position of right eye landmark 3 (inner corner)
 
       async function run() {
         const loadStartTime = performance.now();
@@ -61,7 +65,7 @@
         const remainingTime = Math.max(0, minLoadingTime - elapsedTime);
 
         // Wait for remaining time if needed
-        await new Promise(resolve => setTimeout(resolve, remainingTime));
+        await new Promise((resolve) => setTimeout(resolve, remainingTime));
 
         // Hide loading text and show main content
         const loadingContainer = document.getElementById("loadingContainer");
@@ -122,8 +126,36 @@
           const left = getSubset(detection.landmarks.positions, leftEye);
           const right = getSubset(detection.landmarks.positions, rightEye);
 
-          const l_rat = getRatio(left);
-          const r_rat = getRatio(right);
+          let l_rat = getRatio(left);
+          let r_rat = getRatio(right);
+
+          // Head movement detection: check if key landmarks moved too much
+          const movementThreshold = 2;
+
+          if (prev_left_0 && prev_left_3 && prev_right_0 && prev_right_3) {
+            // Calculate distance moved for each landmark
+            const dist_left_0 = euclideanDistance(left[0], prev_left_0);
+            const dist_left_3 = euclideanDistance(left[3], prev_left_3);
+            const dist_right_0 = euclideanDistance(right[0], prev_right_0);
+            const dist_right_3 = euclideanDistance(right[3], prev_right_3);
+
+            // If any landmark moved more than threshold, invalidate the ratio
+            if (
+              dist_left_0 > movementThreshold ||
+              dist_left_3 > movementThreshold ||
+              dist_right_0 > movementThreshold ||
+              dist_right_3 > movementThreshold
+            ) {
+              l_rat = l_rat_ema; // Override with neutral value (eyes open)
+              r_rat = r_rat_ema;
+            }
+          }
+
+          // Update previous positions for next frame
+          prev_left_0 = { x: left[0]._x, y: left[0]._y };
+          prev_left_3 = { x: left[3]._x, y: left[3]._y };
+          prev_right_0 = { x: right[0]._x, y: right[0]._y };
+          prev_right_3 = { x: right[3]._x, y: right[3]._y };
 
           l_rat_window.unshift(l_rat);
           r_rat_window.unshift(r_rat);
@@ -141,8 +173,8 @@
           if (r_rat_history.length > 100) r_rat_history.shift();
 
           // Debug: Draw eye landmark points and ratio chart
-          //drawDebugLandmarks(canvas, left, right);
-          //drawRatioChart(canvas, l_rat_history, r_rat_history);
+          drawDebugLandmarks(canvas, left, right);
+          drawRatioChart(canvas, l_rat_history, r_rat_history);
 
           if (
             l_rat_ema > 1.05 * Math.min(...l_rat_window) &&
