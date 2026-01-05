@@ -58,7 +58,7 @@ function getRatio(points) {
 function precacheVideos(numVideos) {
   const videoCache = [];
   for (let i = 0; i < numVideos; i++) {
-    const filename = "vid/" + String(i + 1).padStart(3, "0") + ".mp4";
+    const filename = "vid/" + String(i).padStart(3, "0") + ".mp4";
     videoCache.push(filename);
   }
   return videoCache;
@@ -360,7 +360,7 @@ function blink(
     // Now preload the NEXT video (after the one we just switched to) into the now-inactive element
     const nextVideoIndex = (newVideoIndex + 1) % numVideos;
     const nextFilename =
-      "vid/" + String(nextVideoIndex + 1).padStart(3, "0") + ".mp4";
+      "vid/" + String(nextVideoIndex).padStart(3, "0") + ".mp4";
     activeVideo.src = nextFilename;
     activeVideo.load();
   }
