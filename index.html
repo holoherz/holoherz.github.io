@@ -35,6 +35,9 @@
       let r_rat_history = []; // History of right eye aspect ratios for debug chart
 
       async function run() {
+        const loadStartTime = performance.now();
+        const minLoadingTime = 5000; // Minimum 5 seconds
+
         await faceapi.loadTinyFaceDetectorModel("model");
         await faceapi.loadFaceLandmarkTinyModel("model");
 
@@ -52,7 +55,15 @@
         gainNode1 = gainNodes.gainNode1;
         gainNode2 = gainNodes.gainNode2;
 
-        // Hide loading text and show main content immediately
+        // Calculate elapsed time and ensure minimum loading screen display
+        const loadEndTime = performance.now();
+        const elapsedTime = loadEndTime - loadStartTime;
+        const remainingTime = Math.max(0, minLoadingTime - elapsedTime);
+
+        // Wait for remaining time if needed
+        await new Promise(resolve => setTimeout(resolve, remainingTime));
+
+        // Hide loading text and show main content
         const loadingContainer = document.getElementById("loadingContainer");
         if (loadingContainer) {
           loadingContainer.style.display = "none";
