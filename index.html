@@ -36,7 +36,7 @@
 
       async function run() {
         const loadStartTime = performance.now();
-        const minLoadingTime = 5000; // Minimum 5 seconds
+        const minLoadingTime = 10000; // Minimum 5 seconds
 
         await faceapi.loadTinyFaceDetectorModel("model");
         await faceapi.loadFaceLandmarkTinyModel("model");
